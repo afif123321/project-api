@@ -12,7 +12,4 @@
       "dest": "app.py"
     }
   ],
-  "env": {
-    "DATABASE_URL": "sqlite:///database.db"
-  }
 }
