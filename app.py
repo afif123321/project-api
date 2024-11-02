@@ -1,92 +1,73 @@
+# app.py
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask_restful import Api, Resource
+from flask_cors import CORS
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+api = Api(app)
+CORS(app)
 
-# Model untuk Film
-class Film(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    genre = db.Column(db.String(50), nullable=False)
-    price = db.Column(db.Float, nullable=False)
-    stock = db.Column(db.Integer, nullable=False)
-
-# Inisialisasi database
-@app.before_first_request
-def create_tables():
-    db.create_all()
-
-# Endpoint untuk membuat film baru
-@app.route('/films', methods=['POST'])
-def create_film():
-    data = request.get_json()
-    new_film = Film(
-        title=data['title'],
-        genre=data['genre'],
-        price=data['price'],
-        stock=data['stock']
-    )
-    db.session.add(new_film)
-    db.session.commit()
-    return jsonify({'message': 'Film created successfully!'}), 201
-
-# Endpoint untuk membaca semua film
-@app.route('/films', methods=['GET'])
-def get_films():
-    films = Film.query.all()
-    results = [
-        {
-            'id': film.id,
-            'title': film.title,
-            'genre': film.genre,
-            'price': film.price,
-            'stock': film.stock
-        } for film in films
-    ]
-    return jsonify(results)
-
-# Endpoint untuk membaca film berdasarkan ID
-@app.route('/films/<int:id>', methods=['GET'])
-def get_film(id):
-    film = Film.query.get(id)
-    if not film:
-        return jsonify({'message': 'Film not found'}), 404
-    result = {
-        'id': film.id,
-        'title': film.title,
-        'genre': film.genre,
-        'price': film.price,
-        'stock': film.stock
+# Data film (database sederhana)
+films = [
+    {
+        "id": 1,
+        "title": "Inception",
+        "director": "Christopher Nolan",
+        "year": 2010,
+        "genre": "Sci-Fi"
+    },
+    {
+        "id": 2,
+        "title": "The Matrix",
+        "director": "Lana Wachowski, Lilly Wachowski",
+        "year": 1999,
+        "genre": "Action"
     }
-    return jsonify(result)
+]
 
-# Endpoint untuk mengupdate film berdasarkan ID
-@app.route('/films/<int:id>', methods=['PUT'])
-def update_film(id):
-    data = request.get_json()
-    film = Film.query.get(id)
-    if not film:
-        return jsonify({'message': 'Film not found'}), 404
-    film.title = data.get('title', film.title)
-    film.genre = data.get('genre', film.genre)
-    film.price = data.get('price', film.price)
-    film.stock = data.get('stock', film.stock)
-    db.session.commit()
-    return jsonify({'message': 'Film updated successfully'})
+# Helper functions
+def get_all_films():
+    return films
 
-# Endpoint untuk menghapus film berdasarkan ID
-@app.route('/films/<int:id>', methods=['DELETE'])
-def delete_film(id):
-    film = Film.query.get(id)
-    if not film:
-        return jsonify({'message': 'Film not found'}), 404
-    db.session.delete(film)
-    db.session.commit()
-    return jsonify({'message': 'Film deleted successfully'})
+def get_film_by_id(film_id):
+    return next((film for film in films if film["id"] == film_id), None)
 
-# Jalankan server
-if __name__ == '__main__':
+# Resource untuk daftar film (GET & POST)
+class FilmList(Resource):
+    def get(self):
+        return jsonify(get_all_films())
+
+    def post(self):
+        new_film = request.get_json()
+        new_film["id"] = films[-1]["id"] + 1 if films else 1
+        films.append(new_film)
+        return jsonify(new_film), 201
+
+# Resource untuk film individu (GET, PUT, DELETE)
+class Film(Resource):
+    def get(self, film_id):
+        film = get_film_by_id(film_id)
+        if film:
+            return jsonify(film)
+        return jsonify({"error": "Film not found"}), 404
+
+    def put(self, film_id):
+        film = get_film_by_id(film_id)
+        if not film:
+            return jsonify({"error": "Film not found"}), 404
+        update_data = request.get_json()
+        film.update(update_data)
+        return jsonify(film)
+
+    def delete(self, film_id):
+        global films
+        films = [film for film in films if film["id"] != film_id]
+        return jsonify({"message": "Film deleted"}), 204
+
+# Menambahkan endpoint ke API
+api.add_resource(FilmList, "/films")
+api.add_resource(Film, "/films/<int:film_id>")
+
+# Menjalankan aplikasi
+if __name__ == "__main__":
     app.run(debug=True)
